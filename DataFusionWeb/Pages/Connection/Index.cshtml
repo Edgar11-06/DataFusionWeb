@@ -1,0 +1,48 @@
+@page
+@model DataFusionArenaWeb.Pages.Connection.IndexModel
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@{
+    ViewData["Title"] = "Configurar conexión SQL";
+}
+<div class="container py-4">
+    <h2>Configurar conexión</h2>
+
+    <form method="post" class="row g-3">
+        <input name="__RequestVerificationToken" type="hidden" value="@Antiforgery.GetAndStoreTokens(HttpContext).RequestToken" />
+
+        <div class="col-12">
+            <label for="provider" class="form-label">Proveedor</label>
+            <select id="provider" name="Provider" class="form-select w-auto mb-2">
+                <option value="SqlServer" selected="@(Model.Provider == DataFusionArenaWeb.Services.DatabaseProvider.SqlServer ? "selected" : null)">SQL Server</option>
+                <option value="Postgres" selected="@(Model.Provider == DataFusionArenaWeb.Services.DatabaseProvider.Postgres ? "selected" : null)">PostgreSQL</option>
+                <option value="MariaDb" selected="@(Model.Provider == DataFusionArenaWeb.Services.DatabaseProvider.MariaDb ? "selected" : null)">MariaDB / MySQL</option>
+            </select>
+        </div>
+
+        <div class="col-12">
+            <label for="conn" class="form-label">Connection string</label>
+            <input id="conn" name="ConnectionString" value="@Model.ConnectionString" class="form-control" />
+            <div class="form-text">
+                Ej SQL Server: Server=.;Database=DataFusionDb;Trusted_Connection=True;TrustServerCertificate=True
+                <br />Ej PostgreSQL: Host=localhost;Port=5432;Username=miUsuario;Password=miClave;Database=datafusiondb
+                <br />Ej MariaDB: Server=localhost;Port=3306;User=miUsuario;Password=miClave;Database=datafusiondb;
+            </div>
+            @if (!ViewData.ModelState.IsValid)
+            {
+                <div class="text-danger">
+                    @foreach (var e in ViewData.ModelState.Values.SelectMany(v => v.Errors)) { <div>@e.ErrorMessage</div>; }
+                </div>
+            }
+        </div>
+
+        <div class="col-12">
+            <button class="btn btn-primary" type="submit">Guardar e inicializar</button>
+            <a asp-page="/Index" class="btn btn-secondary ms-2">Cancelar</a>
+        </div>
+    </form>
+
+    @if (!string.IsNullOrEmpty(Model.Message))
+    {
+        <div class="alert alert-success mt-3">@Model.Message</div>
+    }
+</div>
