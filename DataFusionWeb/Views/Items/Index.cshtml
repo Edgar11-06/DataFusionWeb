@@ -1,11 +1,12 @@
-﻿@model List<DataFusionArenaWeb.Models.DataItem>
+﻿@model List<Dictionary<string, object?>>
 @{
     ViewData["Title"] = "Datos";
-    var categorias = ViewBag.Categorias as List<string> ?? new List<string>();
-    string selectedCategoria = ViewBag.SelectedCategoria as string ?? "(Todos)";
-    string selectedSort = ViewBag.SelectedSort as string ?? "Original";
     bool isSqlConfigured = ViewBag.IsSqlConfigured as bool? ?? false;
     string connStr = ViewBag.ConnectionString as string ?? string.Empty;
+
+    var filterColumns = ViewBag.FilterColumns as List<string> ?? new List<string>();
+    string selectedFilterColumn = ViewBag.SelectedFilterColumn as string ?? string.Empty;
+    string filterValue = ViewBag.FilterValue as string ?? string.Empty;
 }
 <div class="container py-3">
     <h2>Datos</h2>
@@ -23,72 +24,95 @@
         <input type="file" name="file" class="form-control" />
         <button class="btn btn-primary" type="submit">Subir</button>
 
-        <select id="categoria" name="categoria" class="form-select w-auto ms-2" onchange="onFilterChange()">
-            @foreach (var c in categorias)
+        @* Selector dinámico de columna para filtrar (no dispara automáticamente) *@
+        <select id="filterColumn" name="filterColumn" class="form-select w-auto ms-2">
+            <option value="">(Seleccionar columna)</option>
+            @foreach (var col in filterColumns)
             {
-                <option value="@c" selected="@(c == selectedCategoria ? "selected" : null)">@c</option>
+                <option value="@col" selected="@(string.Equals(col, selectedFilterColumn, StringComparison.CurrentCultureIgnoreCase) ? "selected" : null)">@col</option>
             }
         </select>
 
-        <select id="sort" name="sort" class="form-select w-auto ms-2" onchange="onFilterChange()">
-            <option value="Original" selected="@(selectedSort?.Contains("Original") == true ? "selected" : null)">Orden original</option>
-            <option value="Mayor" selected="@(selectedSort?.Contains("Mayor") == true ? "selected" : null)">Mayor a menor</option>
-            <option value="Menor" selected="@(selectedSort?.Contains("Menor") == true ? "selected" : null)">Menor a mayor</option>
-        </select>
+        @* Campo opcional: no filtra hasta que pulses "Aplicar filtro" *@
+        <input id="filterValue" name="filterValue" type="text" class="form-control w-auto ms-2" placeholder="Valor a filtrar (opcional)" value="@filterValue" />
+
+        <button type="button" class="btn btn-primary ms-2" onclick="onFilterChange()">Aplicar filtro</button>
 
         <div class="btn-group ms-2">
             <a asp-action="Export" asp-route-format="csv" class="btn btn-outline-secondary">CSV</a>
             <a asp-action="Export" asp-route-format="json" class="btn btn-outline-secondary">JSON</a>
             <a asp-action="Export" asp-route-format="xlsx" class="btn btn-outline-secondary">Excel</a>
         </div>
+
+        @* Botón que abre la página de gráficas *@
+        <a asp-action="Charts" asp-controller="Items" class="btn btn-outline-primary ms-2">Ver gráficas</a>
     </form>
 
     <div class="mb-3 d-flex gap-2 align-items-center">
         @* Enlace a la página Razor para configurar la conexión *@
         <a href="/Connection" class="btn btn-outline-info me-2">Configurar conexión</a>
 
-        @* Formulario independiente para migrar a SQL (ya no está dentro del form de Upload) *@
+        @* Formulario independiente para migrar a SQL *@
         <form asp-action="MigrateToSql" asp-controller="Items" method="post" class="d-inline">
             @Html.AntiForgeryToken()
-            <button type="submit" class="btn btn-success">Migrar a SQL</button>
+            <div class="input-group d-inline-flex align-items-center me-2" style="max-width:420px;">
+                <input name="tableName" type="text" class="form-control" placeholder="Nombre tabla (opcional)" />
+                <button type="submit" class="btn btn-success ms-2">Migrar a SQL</button>
+            </div>
         </form>
     </div>
 
-    <table class="table table-striped table-hover">
-        <thead>
-            <tr>
-                <th>Id</th>
-                <th>Nombre</th>
-                <th>Categoria</th>
-                <th class="text-end">Cantidad</th>
-                <th class="text-end">PrecioUnitario</th>
-                <th class="text-end">Valor</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var it in Model)
-            {
+    @if (Model == null || !Model.Any())
+    {
+        <div class="alert alert-secondary">No hay registros para mostrar.</div>
+    }
+    else
+    {
+        var columns = Model.SelectMany(d => d.Keys).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        <table class="table table-striped table-hover">
+            <thead>
                 <tr>
-                    <td>@it.Id</td>
-                    <td>@it.Nombre</td>
-                    <td>@it.Categoria</td>
-                    <td class="text-end">@it.Cantidad</td>
-                    <td class="text-end">@it.PrecioUnitario.ToString("N2")</td>
-                    <td class="text-end">@it.Valor.ToString("N2")</td>
+                    @foreach (var col in columns)
+                    {
+                        <th>@col</th>
+                    }
                 </tr>
-            }
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                @foreach (var row in Model)
+                {
+                    <tr>
+                        @foreach (var col in columns)
+                        {
+                            var exists = row.TryGetValue(col, out var v);
+                            <td>
+                                @(
+                                    exists
+                                    ? (v == null ? Html.Raw("<em>null</em>") : v.ToString())
+                                    : Html.Raw("&nbsp;")
+                                )
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
 </div>
 
 @section Scripts {
     <script>
         function onFilterChange() {
-            const cat = document.getElementById('categoria').value;
-            const sort = document.getElementById('sort').value;
-            const url = new URL(window.location.href);
-            url.searchParams.set('categoria', cat);
-            url.searchParams.set('sort', sort);
+            const filterColumn = document.getElementById('filterColumn').value;
+            const filterValue = document.getElementById('filterValue').value;
+            const url = new URL(window.location.href.split('?')[0], window.location.origin);
+
+            if (filterColumn) url.searchParams.set('filterColumn', filterColumn);
+            else url.searchParams.delete('filterColumn');
+
+            if (filterValue) url.searchParams.set('filterValue', filterValue);
+            else url.searchParams.delete('filterValue');
+
             window.location.href = url.toString();
         }
     </script>

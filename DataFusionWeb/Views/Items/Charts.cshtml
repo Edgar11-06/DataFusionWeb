@@ -1,0 +1,134 @@
+@{
+    ViewData["Title"] = "Gráficas por categoría";
+}
+<div class="container py-3">
+    <h2>Gráficas por categoría</h2>
+
+    <div class="mb-3">
+        <a asp-action="Index" asp-controller="Items" class="btn btn-secondary">Volver a datos</a>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Cantidad vendida por categoría</h5>
+                    <canvas id="cantidadChart" height="300" style="width:100%;max-height:300px;"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mt-3 mt-md-0">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Valor gastado por categoría</h5>
+                    <canvas id="valorChart" height="300" style="width:100%;max-height:300px;"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        (function () {
+            const url = '@Url.Action("CategoryStats", "Items")';
+            // ensure canvases have a fixed height (prevents resize loop)
+            const cCantidad = document.getElementById('cantidadChart');
+            const cValor = document.getElementById('valorChart');
+            if (cCantidad) cCantidad.height = 300;
+            if (cValor) cValor.height = 300;
+
+            // keep references to charts so we can destroy them if script runs again
+            window._charts = window._charts || {};
+            if (window._charts.cantidad) window._charts.cantidad.destroy();
+            if (window._charts.valor) window._charts.valor.destroy();
+
+            fetch(url)
+                .then(r => r.json())
+                .then(data => {
+                    if (!Array.isArray(data) || data.length === 0) return;
+
+                    const labels = data.map(x => x.categoria || x.Categoria || '');
+                    const cantidad = data.map(x => x.cantidad ?? x.Cantidad ?? 0);
+                    const valor = data.map(x => x.valor ?? x.Valor ?? 0);
+
+                    const commonOptions = {
+                        responsive: true,
+                        maintainAspectRatio: true, // <- important: let Chart.js keep aspect ratio
+                        aspectRatio: 2,            // width / height (adjust if needed)
+                        plugins: {
+                            legend: { position: 'top' }
+                        },
+                        scales: {
+                            x: { ticks: { autoSkip: false } },
+                            y: { beginAtZero: true }
+                        }
+                    };
+
+                    // Cantidad chart
+                    const ctx1 = cCantidad.getContext('2d');
+                    window._charts.cantidad = new Chart(ctx1, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Cantidad',
+                                data: cantidad,
+                                backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                                borderColor: 'rgba(54, 162, 235, 1)',
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            ...commonOptions,
+                            scales: {
+                                ...commonOptions.scales,
+                                y: { beginAtZero: true, title: { display: true, text: 'Cantidad' } }
+                            },
+                            plugins: {
+                                ...commonOptions.plugins,
+                                tooltip: { callbacks: { label: ctx => Number(ctx.raw).toLocaleString() } }
+                            }
+                        }
+                    });
+
+                    // Valor chart
+                    const ctx2 = cValor.getContext('2d');
+                    window._charts.valor = new Chart(ctx2, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Valor',
+                                data: valor,
+                                backgroundColor: 'rgba(255, 99, 132, 0.6)',
+                                borderColor: 'rgba(255, 99, 132, 1)',
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            ...commonOptions,
+                            scales: {
+                                ...commonOptions.scales,
+                                y: {
+                                    beginAtZero: true,
+                                    title: { display: true, text: 'Valor' },
+                                    ticks: {
+                                        callback: function (v) { return Number(v).toLocaleString(); }
+                                    }
+                                }
+                            },
+                            plugins: {
+                                ...commonOptions.plugins,
+                                tooltip: { callbacks: { label: ctx => Number(ctx.raw).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) } }
+                            }
+                        }
+                    });
+                })
+                .catch(err => {
+                    console.error('Error cargando estadísticas de categoría', err);
+                });
+        })();
+    </script>
+}
